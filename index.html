@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Redirect</title>
+</head>
+<body>
+    <script>
+        // Extract the access token from the URL fragment
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = params.get("access_token");
+
+        if (accessToken) {
+            // Send the token back to the extension via a message
+            window.opener.postMessage({ token: accessToken }, "*");
+
+            // Close the tab after sending the token
+            window.close();
+        } else {
+            document.body.innerHTML = "<p>Authentication failed. Please try again.</p>";
+        }
+    </script>
+</body>
+</html>
