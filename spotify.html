@@ -16,30 +16,43 @@
             margin: 1rem 0;
             border-radius: 8px;
         }
-        textarea {
-            width: 100%;
-            padding: 0.5rem;
-            margin: 1rem 0;
-        }
     </style>
 </head>
 <body>
-    <div id="loading">
-        <h2>Processing Spotify Authorization...</h2>
-    </div>
-    
+    <div id="loading">Processing authorization...</div>
     <div id="result" style="display:none">
         <h2>Authorization Successful!</h2>
-        <p>Here's your access token:</p>
         <div class="token-box">
             <textarea id="token" rows="3" readonly></textarea>
             <button onclick="copyToken()">Copy Token</button>
         </div>
         <p>Copy this token and paste it into the Tabliss Spotify widget settings.</p>
-        <p><small>Note: This token will expire in 1 hour.</small></p>
     </div>
 
     <script>
+        async function exchangeToken(code, codeVerifier) {
+            const response = await fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    client_id: '62abf7a393e340c2842952f4f4265d96',
+                    grant_type: 'authorization_code',
+                    code: code,
+                    redirect_uri: 'https://bookcatkid.github.io/tabliss-oauth/spotify',
+                    code_verifier: codeVerifier,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to exchange token: ' + await response.text());
+            }
+
+            const data = await response.json();
+            return data.access_token;
+        }
+
         function copyToken() {
             const textarea = document.getElementById('token');
             textarea.select();
@@ -47,16 +60,36 @@
             alert('Token copied to clipboard!');
         }
 
-        // Extract token from URL hash
-        if (window.location.hash) {
-            const params = new URLSearchParams(window.location.hash.substring(1));
-            const token = params.get('access_token');
-            if (token) {
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('result').style.display = 'block';
-                document.getElementById('token').value = token;
+        async function init() {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const state = params.get('state');
+            
+            if (code && state) {
+                try {
+                    // Decode the state parameter to get the code verifier
+                    const stateData = JSON.parse(atob(state));
+                    const codeVerifier = stateData.codeVerifier;
+                    
+                    // Check if the state is not too old (optional, prevents replay attacks)
+                    const stateAge = Date.now() - stateData.timestamp;
+                    if (stateAge > 300000) { // 5 minutes
+                        throw new Error('Authorization took too long, please try again');
+                    }
+
+                    const token = await exchangeToken(code, codeVerifier);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('token').value = token;
+                } catch (error) {
+                    document.getElementById('loading').textContent = 'Error getting token: ' + error.message;
+                }
+            } else {
+                document.getElementById('loading').textContent = 'Error: Missing authorization code';
             }
         }
+
+        init();
     </script>
 </body>
 </html>
