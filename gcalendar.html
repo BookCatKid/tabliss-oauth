@@ -4,15 +4,26 @@
     <title>Tabliss Google Calendar OAuth Redirect</title>
     <script>
         window.onload = function() {
-            const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
+            // Check for parameters in both query string and hash fragment
+            const queryParams = new URLSearchParams(window.location.search);
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
             
-            // Get the extension URL from state parameter
-            const state = params.get('state');
+            // Get the state parameter from either query or hash
+            let state = queryParams.get('state') || hashParams.get('state');
+            
             if (state) {
                 const extensionUrl = decodeURIComponent(state);
-                // Redirect back to the extension with all the original hash parameters
-                window.location.replace(`${extensionUrl}#${hash}`);
+                
+                // Determine if we're using authorization code flow or implicit flow
+                if (queryParams.get('code')) {
+                    // Authorization code flow - pass all query parameters
+                    window.location.replace(`${extensionUrl}?${window.location.search.substring(1)}`);
+                } else if (hashParams.get('access_token')) {
+                    // Implicit flow - pass all hash parameters
+                    window.location.replace(`${extensionUrl}#${window.location.hash.substring(1)}`);
+                } else {
+                    document.body.innerHTML = 'Error: No authorization code or access token found';
+                }
             } else {
                 document.body.innerHTML = 'Error: No state parameter found';
             }
