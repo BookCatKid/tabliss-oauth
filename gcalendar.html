@@ -1,42 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Tabliss OAuth Redirect</title>
+    <title>Tabliss Google Calendar OAuth Redirect</title>
     <script>
-        function getQueryParam(param) {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get(param);
-        }
-
-        function getHashParam(param) {
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            return hashParams.get(param);
-        }
-
         window.onload = function() {
-            // Get the state parameter which contains the extension's redirect URL
-            const state = getQueryParam('state');
-            const error = getQueryParam('error');
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
             
-            if (error) {
-                // Redirect back to extension with error
-                window.location.href = decodeURIComponent(state) + '#error=' + error;
-                return;
-            }
-
-            // Get the access token from the hash fragment
-            const accessToken = getHashParam('access_token');
-            const expiresIn = getHashParam('expires_in');
-            
-            if (accessToken && state) {
-                // Redirect back to the extension with the token
-                const redirectUrl = decodeURIComponent(state);
-                window.location.href = `${redirectUrl}#access_token=${accessToken}&expires_in=${expiresIn}`;
+            // Get the extension URL from state parameter
+            const state = params.get('state');
+            if (state) {
+                const extensionUrl = decodeURIComponent(state);
+                // Redirect back to the extension with all the original hash parameters
+                window.location.replace(`${extensionUrl}#${hash}`);
+            } else {
+                document.body.innerHTML = 'Error: No state parameter found';
             }
         };
     </script>
 </head>
 <body>
-    <p>Redirecting...</p>
+    <p>Redirecting back to Tabliss...</p>
 </body>
 </html>
