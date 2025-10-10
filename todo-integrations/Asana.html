@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth Callback - Tabliss</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .loading {
+            color: #666;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: left;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OAuth Callback</h1>
+        <div id="status" class="loading">
+            <div class="spinner"></div>
+            Processing OAuth callback...
+        </div>
+        <div id="details" style="margin-top: 20px; display: none;">
+            <pre id="debug-info"></pre>
+        </div>
+    </div>
+
+    <script>
+        async function handleOAuthCallback() {
+            const statusEl = document.getElementById('status');
+            const detailsEl = document.getElementById('details');
+            const debugEl = document.getElementById('debug-info');
+            
+            try {
+                // Parse URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const error = urlParams.get('error');
+                const errorDescription = urlParams.get('error_description');
+                
+                debugEl.textContent = `URL: ${window.location.href}\nSearch params: ${window.location.search}`;
+                detailsEl.style.display = 'block';
+                
+                // Check for OAuth errors
+                if (error) {
+                    throw new Error(`OAuth error: ${error}${errorDescription ? ` - ${errorDescription}` : ''}`);
+                }
+                
+                // Check if we have an authorization code
+                if (!code) {
+                    throw new Error('No authorization code received from OAuth provider');
+                }
+                
+                console.log('Authorization code received:', code.substring(0, 10) + '...');
+                
+                // Exchange authorization code for access token
+                statusEl.innerHTML = '<div class="spinner"></div>Exchanging code for access token...';
+                
+                // Determine the correct redirect URI (should match what was sent in the original request)
+                const redirectUri = urlParams.get('state') || window.location.origin + window.location.pathname;
+                
+                const tokenResponse = await fetch('https://app.asana.com/-/oauth_token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        client_id: '1134637450518855',
+                        redirect_uri: redirectUri,
+                        code: code,
+                    }).toString(),
+                });
+                
+                if (!tokenResponse.ok) {
+                    const errorText = await tokenResponse.text();
+                    throw new Error(`Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}\n${errorText}`);
+                }
+                
+                const tokenData = await tokenResponse.json();
+                console.log('Token exchange successful');
+                
+                // Construct the callback URL with the access token
+                const callbackUrl = new URL(window.location.href);
+                callbackUrl.search = ''; // Clear existing params
+                callbackUrl.hash = `access_token=${tokenData.access_token}&token_type=${tokenData.token_type || 'Bearer'}&expires_in=${tokenData.expires_in || 3600}`;
+                
+                statusEl.innerHTML = '<div class="success">✓ Authentication successful! Redirecting...</div>';
+                
+                // Send the result back to the parent window
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'OAUTH_CALLBACK',
+                        url: callbackUrl.href
+                    }, '*');
+                    
+                    // Close the popup after a short delay
+                    setTimeout(() => {
+                        window.close();
+                    }, 1000);
+                } else {
+                    // If not in a popup, redirect to the URL with the token
+                    statusEl.innerHTML = '<div class="success">✓ Authentication successful!</div>';
+                    debugEl.textContent += `\n\nRedirect URL: ${callbackUrl.href}`;
+                    
+                    setTimeout(() => {
+                        window.location.href = callbackUrl.href;
+                    }, 2000);
+                }
+                
+            } catch (error) {
+                console.error('OAuth callback error:', error);
+                statusEl.innerHTML = `<div class="error">✗ Authentication failed: ${error.message}</div>`;
+                debugEl.textContent += `\n\nError: ${error.message}`;
+                
+                // Send error back to parent window
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'OAUTH_CALLBACK',
+                        error: error.message
+                    }, '*');
+                }
+            }
+        }
+        
+        // Run the callback handler when the page loads
+        document.addEventListener('DOMContentLoaded', handleOAuthCallback);
+    </script>
+</body>
+</html>
