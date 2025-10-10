@@ -92,40 +92,14 @@
                 
                 console.log('Authorization code received:', code.substring(0, 10) + '...');
                 
-                // Exchange authorization code for access token
-                statusEl.innerHTML = '<div class="spinner"></div>Exchanging code for access token...';
+                // Instead of trying to exchange the token here (which fails due to CORS),
+                // pass the authorization code back to the main application
+                statusEl.innerHTML = '<div class="success">✓ Authorization successful! Returning to application...</div>';
                 
-                // Use the exact redirect URI that was registered with Asana
-                const redirectUri = 'https://bookcatkid.github.io/tabliss-oauth/todo-integrations/Asana.html';
-                
-                const tokenResponse = await fetch('https://app.asana.com/-/oauth_token', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        grant_type: 'authorization_code',
-                        client_id: '1211615347827392',
-                        client_secret: '56a2500b7c3f8b97ff9386ad40373c3d',
-                        redirect_uri: redirectUri,
-                        code: code,
-                    }).toString(),
-                });
-                
-                if (!tokenResponse.ok) {
-                    const errorText = await tokenResponse.text();
-                    throw new Error(`Token exchange failed: ${tokenResponse.status} ${tokenResponse.statusText}\n${errorText}`);
-                }
-                
-                const tokenData = await tokenResponse.json();
-                console.log('Token exchange successful');
-                
-                // Construct the callback URL with the access token
+                // Construct the callback URL with the authorization code
                 const callbackUrl = new URL(window.location.href);
                 callbackUrl.search = ''; // Clear existing params
-                callbackUrl.hash = `access_token=${tokenData.access_token}&token_type=${tokenData.token_type || 'Bearer'}&expires_in=${tokenData.expires_in || 3600}`;
-                
-                statusEl.innerHTML = '<div class="success">✓ Asana authentication successful! Redirecting...</div>';
+                callbackUrl.hash = `code=${code}&state=success`;
                 
                 // Send the result back to the parent window
                 if (window.opener) {
@@ -139,8 +113,8 @@
                         window.close();
                     }, 1000);
                 } else {
-                    // If not in a popup, redirect to the URL with the token
-                    statusEl.innerHTML = '<div class="success">✓ Asana authentication successful!</div>';
+                    // If not in a popup, redirect to the URL with the code
+                    statusEl.innerHTML = '<div class="success">✓ Authorization successful!</div>';
                     debugEl.textContent += `\n\nRedirect URL: ${callbackUrl.href}`;
                     
                     setTimeout(() => {
