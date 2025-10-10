@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OAuth Callback - Tabliss</title>
+    <title>Asana OAuth Callback - Tabliss</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -54,10 +54,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>OAuth Callback</h1>
+        <h1>Asana OAuth Callback</h1>
         <div id="status" class="loading">
             <div class="spinner"></div>
-            Processing OAuth callback...
+            Processing Asana authentication...
         </div>
         <div id="details" style="margin-top: 20px; display: none;">
             <pre id="debug-info"></pre>
@@ -87,7 +87,7 @@
                 
                 // Check if we have an authorization code
                 if (!code) {
-                    throw new Error('No authorization code received from OAuth provider');
+                    throw new Error('No authorization code received from Asana');
                 }
                 
                 console.log('Authorization code received:', code.substring(0, 10) + '...');
@@ -95,8 +95,8 @@
                 // Exchange authorization code for access token
                 statusEl.innerHTML = '<div class="spinner"></div>Exchanging code for access token...';
                 
-                // Determine the correct redirect URI (should match what was sent in the original request)
-                const redirectUri = urlParams.get('state') || window.location.origin + window.location.pathname;
+                // Use the exact redirect URI that was registered with Asana
+                const redirectUri = 'https://bookcatkid.github.io/tabliss-oauth/todo-integrations/Asana.html';
                 
                 const tokenResponse = await fetch('https://app.asana.com/-/oauth_token', {
                     method: 'POST',
@@ -105,7 +105,8 @@
                     },
                     body: new URLSearchParams({
                         grant_type: 'authorization_code',
-                        client_id: '1134637450518855',
+                        client_id: '1211615347827392',
+                        client_secret: '56a2500b7c3f8b97ff9386ad40373c3d',
                         redirect_uri: redirectUri,
                         code: code,
                     }).toString(),
@@ -124,7 +125,7 @@
                 callbackUrl.search = ''; // Clear existing params
                 callbackUrl.hash = `access_token=${tokenData.access_token}&token_type=${tokenData.token_type || 'Bearer'}&expires_in=${tokenData.expires_in || 3600}`;
                 
-                statusEl.innerHTML = '<div class="success">✓ Authentication successful! Redirecting...</div>';
+                statusEl.innerHTML = '<div class="success">✓ Asana authentication successful! Redirecting...</div>';
                 
                 // Send the result back to the parent window
                 if (window.opener) {
@@ -139,7 +140,7 @@
                     }, 1000);
                 } else {
                     // If not in a popup, redirect to the URL with the token
-                    statusEl.innerHTML = '<div class="success">✓ Authentication successful!</div>';
+                    statusEl.innerHTML = '<div class="success">✓ Asana authentication successful!</div>';
                     debugEl.textContent += `\n\nRedirect URL: ${callbackUrl.href}`;
                     
                     setTimeout(() => {
@@ -148,8 +149,8 @@
                 }
                 
             } catch (error) {
-                console.error('OAuth callback error:', error);
-                statusEl.innerHTML = `<div class="error">✗ Authentication failed: ${error.message}</div>`;
+                console.error('Asana OAuth callback error:', error);
+                statusEl.innerHTML = `<div class="error">✗ Asana authentication failed: ${error.message}</div>`;
                 debugEl.textContent += `\n\nError: ${error.message}`;
                 
                 // Send error back to parent window
