@@ -128,12 +128,12 @@
                 debugEl.textContent += `\n\nError: ${error.message}`;
                 
                 // Send error back to parent window
-                if (window.opener) {
-                    window.opener.postMessage({
-                        type: 'OAUTH_CALLBACK',
-                        error: error.message
-                    }, '*');
-                }
+                // if (window.opener) {
+                //     window.opener.postMessage({
+                //         type: 'OAUTH_CALLBACK',
+                //         error: error.message
+                //     }, '*');
+                // }
             }
         }
         
