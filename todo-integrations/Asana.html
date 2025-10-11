@@ -19,126 +19,63 @@
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        .loading {
-            color: #666;
-        }
         .success {
             color: #28a745;
         }
         .error {
             color: #dc3545;
         }
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        pre {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            text-align: left;
-            font-size: 12px;
-            overflow-x: auto;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Asana OAuth Callback</h1>
-        <div id="status" class="loading">
-            <div class="spinner"></div>
-            Processing Asana authentication...
-        </div>
-        <div id="details" style="margin-top: 20px; display: none;">
-            <pre id="debug-info"></pre>
-        </div>
+        <div id="status">Processing...</div>
     </div>
 
     <script>
-        async function handleOAuthCallback() {
+        function handleCallback() {
             const statusEl = document.getElementById('status');
-            const detailsEl = document.getElementById('details');
-            const debugEl = document.getElementById('debug-info');
             
             try {
-                // Parse URL parameters
-                const urlParams = new URLSearchParams(window.location.search);
-                const code = urlParams.get('code');
-                const error = urlParams.get('error');
-                const errorDescription = urlParams.get('error_description');
+                // Get the full URL with all parameters
+                const currentUrl = window.location.href;
                 
-                debugEl.textContent = `URL: ${window.location.href}\nSearch params: ${window.location.search}`;
-                detailsEl.style.display = 'block';
-                
-                // Check for OAuth errors
-                if (error) {
-                    throw new Error(`OAuth error: ${error}${errorDescription ? ` - ${errorDescription}` : ''}`);
-                }
-                
-                // Check if we have an authorization code
-                if (!code) {
-                    throw new Error('No authorization code received from Asana');
-                }
-                
-                console.log('Authorization code received:', code.substring(0, 10) + '...');
-                
-                // Instead of trying to exchange the token here (which fails due to CORS),
-                // pass the authorization code back to the main application
-                statusEl.innerHTML = '<div class="success">✓ Authorization successful! Returning to application...</div>';
-                
-                // Construct the callback URL with the authorization code
-                const callbackUrl = new URL(window.location.href);
-                callbackUrl.search = ''; // Clear existing params
-                callbackUrl.hash = `code=${code}&state=success`;
-                
-                // Send the result back to the parent window
+                // Send the complete URL back to the parent window
                 if (window.opener) {
                     window.opener.postMessage({
                         type: 'OAUTH_CALLBACK',
-                        url: callbackUrl.href
+                        url: currentUrl
                     }, '*');
                     
-                    // Close the popup after a short delay
+                    statusEl.innerHTML = '<div class="success">✓ Authorization complete! Closing window...</div>';
+                    
+                    // Close the popup
                     setTimeout(() => {
                         window.close();
                     }, 1000);
                 } else {
-                    // If not in a popup, redirect to the URL with the code
-                    statusEl.innerHTML = '<div class="success">✓ Authorization successful!</div>';
-                    debugEl.textContent += `\n\nRedirect URL: ${callbackUrl.href}`;
-                    
-                    setTimeout(() => {
-                        window.location.href = callbackUrl.href;
-                    }, 2000);
+                    // If not in a popup, just show the URL for debugging
+                    statusEl.innerHTML = '<div class="success">✓ Authorization complete!</div>';
+                    console.log('OAuth callback URL:', currentUrl);
                 }
                 
             } catch (error) {
-                console.error('Asana OAuth callback error:', error);
-                statusEl.innerHTML = `<div class="error">✗ Asana authentication failed: ${error.message}</div>`;
-                debugEl.textContent += `\n\nError: ${error.message}`;
+                console.error('Callback error:', error);
+                statusEl.innerHTML = `<div class="error">✗ Error: ${error.message}</div>`;
                 
                 // Send error back to parent window
-                // if (window.opener) {
-                //     window.opener.postMessage({
-                //         type: 'OAUTH_CALLBACK',
-                //         error: error.message
-                //     }, '*');
-                // }
+                if (window.opener) {
+                    window.opener.postMessage({
+                        type: 'OAUTH_CALLBACK',
+                        error: error.message
+                    }, '*');
+                }
             }
         }
         
-        // Run the callback handler when the page loads
-        document.addEventListener('DOMContentLoaded', handleOAuthCallback);
+        // Run immediately when the page loads
+        handleCallback();
     </script>
 </body>
 </html>
