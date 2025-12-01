@@ -1,36 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Tabliss Google Calendar OAuth Redirect</title>
-    <script>
-        window.onload = function() {
-            // Check for parameters in both query string and hash fragment
-            const queryParams = new URLSearchParams(window.location.search);
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            
-            // Get the state parameter from either query or hash
-            let state = queryParams.get('state') || hashParams.get('state');
-            
-            if (state) {
-                const extensionUrl = decodeURIComponent(state);
-                
-                // Determine if we're using authorization code flow or implicit flow
-                if (queryParams.get('code')) {
-                    // Authorization code flow - pass all query parameters
-                    window.location.replace(`${extensionUrl}?${window.location.search.substring(1)}`);
-                } else if (hashParams.get('access_token')) {
-                    // Implicit flow - pass all hash parameters
-                    window.location.replace(`${extensionUrl}#${window.location.hash.substring(1)}`);
-                } else {
-                    document.body.innerHTML = 'Error: No authorization code or access token found';
-                }
-            } else {
-                document.body.innerHTML = 'Error: No state parameter found';
-            }
-        };
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TablissNG OAuth Callback</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 1rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+    h1 { margin: 0 0 1rem 0; }
+    .status { font-size: 1.2rem; opacity: 0.9; }
+    .success { color: #4ade80; }
+    .error { color: #f87171; }
+  </style>
 </head>
 <body>
-    <p>Redirecting back to Tabliss...</p>
+  <div class="container">
+    <h1 id="title">Authenticating...</h1>
+    <p class="status" id="status">Please wait...</p>
+  </div>
+
+  <script>
+    (function() {
+      const title = document.getElementById('title');
+      const status = document.getElementById('status');
+
+      try {
+        // Extract token from URL
+        // OAuth 2.0 implicit flow returns token in hash fragment: #access_token=...
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const token = params.get('access_token');
+        const error = params.get('error');
+
+        if (error) {
+          throw new Error(error);
+        }
+
+        if (!token) {
+          throw new Error('No access token received');
+        }
+
+        // Send token back to opener/parent
+        if (window.opener) {
+          // Opened as popup from web app
+          window.opener.postMessage({
+            type: 'TABLISS_OAUTH_TOKEN',
+            token: token,
+            expiresIn: params.get('expires_in'),
+          }, '*');
+          title.textContent = '✓ Success!';
+          title.className = 'success';
+          status.textContent = 'Authentication successful. You can close this window.';
+
+          // Auto-close after 2 seconds
+          setTimeout(() => window.close(), 2000);
+        } else if (window.parent !== window) {
+          // Opened in iframe (shouldn't happen but handle it)
+          window.parent.postMessage({
+            type: 'TABLISS_OAUTH_TOKEN',
+            token: token,
+            expiresIn: params.get('expires_in'),
+          }, '*');
+          title.textContent = '✓ Success!';
+          title.className = 'success';
+          status.textContent = 'Authentication successful.';
+        } else {
+          // Opened directly or in extension context
+          // For extensions, the launchWebAuthFlow will capture the redirect automatically
+          title.textContent = '✓ Success!';
+          title.className = 'success';
+          status.textContent = 'Authentication successful. Redirecting...';
+        }
+      } catch (err) {
+        console.error('OAuth callback error:', err);
+        title.textContent = '✗ Authentication Failed';
+        title.className = 'error';
+        status.textContent = err.message || 'An error occurred during authentication.';
+
+        // Send error to opener if available
+        if (window.opener || window.parent !== window) {
+          const target = window.opener || window.parent;
+          target.postMessage({
+            type: 'TABLISS_OAUTH_ERROR',
+            error: err.message,
+          }, '*');
+        }
+      }
+    })();
+  </script>
 </body>
 </html>
