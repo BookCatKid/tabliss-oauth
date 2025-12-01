@@ -3,102 +3,222 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TablissNG OAuth Callback</title>
+  <title>TablissNG Authentication</title>
   <style>
+    :root {
+      /* Light Mode Variables */
+      --bg-color: #f3f4f6;
+      --card-bg: #ffffff;
+      --text-main: #1f2937;
+      --text-sub: #6b7280;
+      --success: #10b981;
+      --error: #ef4444;
+      --accent: #6366f1;
+      --border: #e5e7eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        /* Dark Mode Variables */
+        --bg-color: #111827;
+        --card-bg: #1f2937;
+        --text-main: #f9fafb;
+        --text-sub: #9ca3af;
+        --border: #374151;
+      }
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
       display: flex;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      transition: background-color 0.3s;
     }
-    .container {
+
+    .card {
+      background: var(--card-bg);
+      padding: 2.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      border: 1px solid var(--border);
       text-align: center;
-      padding: 2rem;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 1rem;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+      max-width: 400px;
+      width: 90%;
+      opacity: 0;
+      transform: translateY(10px);
+      animation: fadeIn 0.4s forwards;
     }
-    h1 { margin: 0 0 1rem 0; }
-    .status { font-size: 1.2rem; opacity: 0.9; }
-    .success { color: #4ade80; }
-    .error { color: #f87171; }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 0.5rem 0;
+    }
+
+    p {
+      color: var(--text-sub);
+      margin: 0 0 1.5rem 0;
+      line-height: 1.5;
+    }
+
+    /* Icon States */
+    .icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 1rem;
+      display: inline-block;
+    }
+
+    .spinner {
+      border: 4px solid var(--border);
+      border-top: 4px solid var(--accent);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+
+    .btn {
+      background-color: var(--text-main);
+      color: var(--card-bg);
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      display: none; /* Hidden by default */
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+
+    /* Utility Classes */
+    .text-success { color: var(--success); }
+    .text-error { color: var(--error); }
+    .hidden { display: none !important; }
+
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1 id="title">Authenticating...</h1>
-    <p class="status" id="status">Please wait...</p>
+
+  <div class="card">
+    <!-- State Icons -->
+    <div id="icon-loading" class="icon spinner"></div>
+    
+    <svg id="icon-success" class="icon text-success hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+
+    <svg id="icon-error" class="icon text-error hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+
+    <h1 id="title">Authenticating</h1>
+    <p id="status">Verifying credentials...</p>
+    
+    <button id="close-btn" class="btn" onclick="window.close()">Close Window</button>
   </div>
 
   <script>
     (function() {
-      const title = document.getElementById('title');
-      const status = document.getElementById('status');
+      // CONFIGURATION -----------------------------------------
+      // IMPORTANT: Replace this with your actual app's origin URL for security.
+      // Use '*' only if strictly necessary (e.g., dynamic extension IDs), but it is risky.
+      const TARGET_ORIGIN = window.location.origin; 
+      // -------------------------------------------------------
+
+      const ui = {
+        title: document.getElementById('title'),
+        status: document.getElementById('status'),
+        btn: document.getElementById('close-btn'),
+        icons: {
+          loading: document.getElementById('icon-loading'),
+          success: document.getElementById('icon-success'),
+          error: document.getElementById('icon-error')
+        }
+      };
+
+      function setUIState(state, message, detail) {
+        // Hide all icons
+        Object.values(ui.icons).forEach(el => el.classList.add('hidden'));
+
+        if (state === 'success') {
+          ui.icons.success.classList.remove('hidden');
+          ui.title.textContent = 'Success!';
+          ui.status.textContent = message;
+          // Show close button just in case auto-close fails
+          setTimeout(() => ui.btn.style.display = 'inline-block', 500);
+        } else if (state === 'error') {
+          ui.icons.error.classList.remove('hidden');
+          ui.title.textContent = 'Authentication Failed';
+          ui.title.classList.add('text-error');
+          ui.status.textContent = detail ? `${message}: ${detail}` : message;
+          ui.btn.style.display = 'inline-block';
+        }
+      }
 
       try {
-        // Extract token from URL
-        // OAuth 2.0 implicit flow returns token in hash fragment: #access_token=...
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
-        const token = params.get('access_token');
-        const error = params.get('error');
+        // 1. Parse Params (Handle both Hash and Query string styles)
+        const urlParams = new URLSearchParams(
+          window.location.hash.substring(1) || window.location.search
+        );
+        
+        const token = urlParams.get('access_token');
+        const error = urlParams.get('error');
+        const errorDesc = urlParams.get('error_description');
+        const expiresIn = urlParams.get('expires_in');
+        const state = urlParams.get('state'); // Highly recommended to check this
 
-        if (error) {
-          throw new Error(error);
-        }
+        // 2. Error Check
+        if (error) throw new Error(errorDesc || error);
+        if (!token) throw new Error('No access token received from provider.');
 
-        if (!token) {
-          throw new Error('No access token received');
-        }
+        // 3. Prepare Payload
+        const messagePayload = {
+          type: 'TABLISS_OAUTH_TOKEN',
+          token: token,
+          expiresIn: expiresIn,
+          state: state
+        };
 
-        // Send token back to opener/parent
-        if (window.opener) {
-          // Opened as popup from web app
-          window.opener.postMessage({
-            type: 'TABLISS_OAUTH_TOKEN',
-            token: token,
-            expiresIn: params.get('expires_in'),
-          }, '*');
-          title.textContent = '✓ Success!';
-          title.className = 'success';
-          status.textContent = 'Authentication successful. You can close this window.';
+        // 4. Send Message
+        const targetWindow = window.opener || window.parent;
 
-          // Auto-close after 2 seconds
-          setTimeout(() => window.close(), 2000);
-        } else if (window.parent !== window) {
-          // Opened in iframe (shouldn't happen but handle it)
-          window.parent.postMessage({
-            type: 'TABLISS_OAUTH_TOKEN',
-            token: token,
-            expiresIn: params.get('expires_in'),
-          }, '*');
-          title.textContent = '✓ Success!';
-          title.className = 'success';
-          status.textContent = 'Authentication successful.';
+        if (targetWindow && targetWindow !== window) {
+          // Security: Use TARGET_ORIGIN instead of '*'
+          // If running within an extension where origin is tricky, ensure
+          // the receiving end verifies the message source.
+          targetWindow.postMessage(messagePayload, '*'); // Update '*' to TARGET_ORIGIN if possible
+          
+          setUIState('success', 'You have successfully signed in. This window will close shortly.');
+          
+          // Auto-close attempt
+          setTimeout(() => {
+            try { window.close(); } catch(e) { /* Ignore if blocked */ }
+          }, 1500);
+
         } else {
-          // Opened directly or in extension context
-          // For extensions, the launchWebAuthFlow will capture the redirect automatically
-          title.textContent = '✓ Success!';
-          title.className = 'success';
-          status.textContent = 'Authentication successful. Redirecting...';
+          // Fallback: This usually happens if the user opened the callback URL directly
+          // or if the WebAuthFlow in an extension captured the redirect silently.
+          setUIState('success', 'Authentication complete. You can close this tab.');
         }
-      } catch (err) {
-        console.error('OAuth callback error:', err);
-        title.textContent = '✗ Authentication Failed';
-        title.className = 'error';
-        status.textContent = err.message || 'An error occurred during authentication.';
 
-        // Send error to opener if available
-        if (window.opener || window.parent !== window) {
-          const target = window.opener || window.parent;
-          target.postMessage({
+      } catch (err) {
+        console.error('OAuth Error:', err);
+        setUIState('error', 'We could not log you in', err.message);
+
+        // Notify parent of error
+        const targetWindow = window.opener || window.parent;
+        if (targetWindow && targetWindow !== window) {
+          targetWindow.postMessage({
             type: 'TABLISS_OAUTH_ERROR',
-            error: err.message,
+            error: err.message
           }, '*');
         }
       }
