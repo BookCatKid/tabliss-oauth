@@ -119,23 +119,18 @@
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
 
-    <h1 id="title">Authenticating</h1>
-    <p id="status">Verifying credentials...</p>
+    <h1 id="title">Authenticating...</h1>
+    <p id="message">Please wait while we complete the sign-in process.</p>
     
     <button id="close-btn" class="btn" onclick="window.close()">Close Window</button>
   </div>
 
   <script>
     (function() {
-      // CONFIGURATION -----------------------------------------
-      // IMPORTANT: Replace this with your actual app's origin URL for security.
-      // Use '*' only if strictly necessary (e.g., dynamic extension IDs), but it is risky.
-      const TARGET_ORIGIN = window.location.origin; 
-      // -------------------------------------------------------
-
+      // UI Helper Functions
       const ui = {
         title: document.getElementById('title'),
-        status: document.getElementById('status'),
+        message: document.getElementById('message'),
         btn: document.getElementById('close-btn'),
         icons: {
           loading: document.getElementById('icon-loading'),
@@ -144,84 +139,102 @@
         }
       };
 
-      function setUIState(state, message, detail) {
+      function setUIState(state, titleText, messageText) {
         // Hide all icons
         Object.values(ui.icons).forEach(el => el.classList.add('hidden'));
 
         if (state === 'success') {
           ui.icons.success.classList.remove('hidden');
-          ui.title.textContent = 'Success!';
-          ui.status.textContent = message;
-          // Show close button just in case auto-close fails
+          ui.title.textContent = titleText || 'Success!';
+          ui.title.className = 'text-success';
+          ui.message.textContent = messageText || 'You can now close this window.';
           setTimeout(() => ui.btn.style.display = 'inline-block', 500);
         } else if (state === 'error') {
           ui.icons.error.classList.remove('hidden');
-          ui.title.textContent = 'Authentication Failed';
-          ui.title.classList.add('text-error');
-          ui.status.textContent = detail ? `${message}: ${detail}` : message;
+          ui.title.textContent = titleText || 'Authentication Failed';
+          ui.title.className = 'text-error';
+          ui.message.textContent = messageText;
           ui.btn.style.display = 'inline-block';
         }
       }
 
-      try {
-        // 1. Parse Params (Handle both Hash and Query string styles)
-        const urlParams = new URLSearchParams(
-          window.location.hash.substring(1) || window.location.search
-        );
-        
-        const token = urlParams.get('access_token');
-        const error = urlParams.get('error');
-        const errorDesc = urlParams.get('error_description');
-        const expiresIn = urlParams.get('expires_in');
-        const state = urlParams.get('state'); // Highly recommended to check this
-
-        // 2. Error Check
-        if (error) throw new Error(errorDesc || error);
-        if (!token) throw new Error('No access token received from provider.');
-
-        // 3. Prepare Payload
-        const messagePayload = {
-          type: 'TABLISS_OAUTH_TOKEN',
-          token: token,
-          expiresIn: expiresIn,
-          state: state
-        };
-
-        // 4. Send Message
-        const targetWindow = window.opener || window.parent;
-
-        if (targetWindow && targetWindow !== window) {
-          // Security: Use TARGET_ORIGIN instead of '*'
-          // If running within an extension where origin is tricky, ensure
-          // the receiving end verifies the message source.
-          targetWindow.postMessage(messagePayload, '*'); // Update '*' to TARGET_ORIGIN if possible
+      function processAuth() {
+        try {
+          // 1. Parse Parameters
+          // We look in both Search (?) and Hash (#) to support different providers
+          const searchParams = new URLSearchParams(window.location.search);
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
           
-          setUIState('success', 'You have successfully signed in. This window will close shortly.');
+          const code = searchParams.get('code') || hashParams.get('code');
+          const token = searchParams.get('access_token') || hashParams.get('access_token');
+          const error = searchParams.get('error') || hashParams.get('error');
+          const errorDesc = searchParams.get('error_description') || hashParams.get('error_description');
+
+          // 2. Handle Errors explicitly
+          if (error) {
+            throw new Error(errorDesc || error);
+          }
+
+          let messagePayload = null;
+
+          // 3. Scenario A: Authorization Code (PKCE Flow)
+          if (code) {
+            messagePayload = {
+              type: 'TABLISS_OAUTH_CODE',
+              code: code,
+              state: searchParams.get('state') || hashParams.get('state')
+            };
+          } 
+          // 4. Scenario B: Access Token (Implicit Flow)
+          else if (token) {
+            messagePayload = {
+              type: 'TABLISS_OAUTH_TOKEN',
+              token: token,
+              expiresIn: searchParams.get('expires_in') || hashParams.get('expires_in'),
+              state: searchParams.get('state') || hashParams.get('state')
+            };
+          } 
+          // 5. Scenario C: No valid data found
+          else {
+            throw new Error('No authorization code or token found in URL.');
+          }
+
+          // 6. Send to Parent/Opener
+          const targetWindow = window.opener || window.parent;
           
-          // Auto-close attempt
-          setTimeout(() => {
-            try { window.close(); } catch(e) { /* Ignore if blocked */ }
-          }, 1500);
+          if (targetWindow && targetWindow !== window) {
+            // NOTE: Replace '*' with 'https://your-app-url.com' for better security
+            targetWindow.postMessage(messagePayload, '*');
+            
+            setUIState('success', 'Success!', 'You can now close this window.');
+            
+            // Attempt auto-close
+            setTimeout(() => {
+              try { window.close(); } catch(e) { /* Ignore if blocked */ }
+            }, 1500);
+          } else {
+            // Extension Context: 
+            // If opened via chrome.identity.launchWebAuthFlow, there is no opener.
+            // The extension detects the URL change automatically.
+            setUIState('success', 'Success!', 'You can now return to Tabliss.');
+          }
 
-        } else {
-          // Fallback: This usually happens if the user opened the callback URL directly
-          // or if the WebAuthFlow in an extension captured the redirect silently.
-          setUIState('success', 'Authentication complete. You can close this tab.');
-        }
+        } catch (err) {
+          console.error('Auth Error:', err);
+          setUIState('error', 'Authentication Failed', err.message);
 
-      } catch (err) {
-        console.error('OAuth Error:', err);
-        setUIState('error', 'We could not log you in', err.message);
-
-        // Notify parent of error
-        const targetWindow = window.opener || window.parent;
-        if (targetWindow && targetWindow !== window) {
-          targetWindow.postMessage({
-            type: 'TABLISS_OAUTH_ERROR',
-            error: err.message
-          }, '*');
+          // Try to report error back to app if possible
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'TABLISS_OAUTH_ERROR',
+              error: err.message
+            }, '*');
+          }
         }
       }
+
+      // Run
+      processAuth();
     })();
   </script>
 </body>
